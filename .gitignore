@@ -1,0 +1,6 @@
+# Ignore any build output out of the /bin folder
+src/xbbasm
+#
+# Ignore default output filenames and other possible assembled files
+src/*.prg
+src/*.out
