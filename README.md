@@ -19,13 +19,17 @@ For maximum convenience **(!)** put the binary into your local `~/bin` and make 
 Some cool things you can do with it (a.k.a. _Do-s_ and _Don't-s_):
 
 - Use include syntax anywhere in your file like:
+```
+./include screen.asm
 
-    ./include screen.asm
-    {... some code ...}
-    ./include subs/math.asm
-    {... some more code ...}
-    ./include ../misc.asm
+{... some code ...}
 
+./include subs/math.asm
+
+{... some more code ...}
+
+./include ../misc.asm
+```
 - Inline or off-line labels, just take into account that labels not on the same line need to end with `:`. For labels on the same line that is optional.
 
 - It is allowed to enter label aliases (EQU in Merlin) between an off-line label and the next code line (see examples). This helps to put those below the subroutine name label but above the code and give it a more function-like look.
@@ -42,7 +46,7 @@ Example asm source files in the `/examples` directory were taken from different 
 
 For keeping the directory structure of the project, if you're using the default workspace in `$HOME/go` in Linux you can create a symbolic link like:
 
-    ln -s /home/you/path/to/xbbasm/src/ /home/you/go/src/xbbasm
+    $ ln -s /home/you/path/to/xbbasm/src/ /home/you/go/src/xbbasm
 
 
 
