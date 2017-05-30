@@ -2,6 +2,8 @@
 
 A cross-assembler targeting the 6502/6510 processor. Mainly written for learning purposes and to assist me in my experiments with assembly language programming for the Commodore 64. Its syntax, although very limited, borrows a bit from Merlin and from the C64 Macro Assembler Development System.
 
+![Alt text](https://cloud.githubusercontent.com/assets/19293817/26608976/c1e64982-459e-11e7-9cca-cc81a561ba5b.jpg "we're sex bob-omb!")
+
 ## Usage
 
 Basic usage is extremely simple, just run:
