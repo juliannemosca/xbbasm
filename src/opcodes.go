@@ -47,6 +47,9 @@ var pseudoOpcodes map[string]opcode = map[string]opcode{
 
 	// DFB
 	"DFB": opcode{mnemonic: "DFB", mode: NOMODE},
+
+	// ./BIN
+	"./BIN": opcode{mnemonic: "./BIN", mode: NOMODE},
 }
 
 var opcodes map[string]opcode = map[string]opcode{

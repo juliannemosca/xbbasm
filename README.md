@@ -20,6 +20,11 @@ For maximum convenience **(!)** put the binary into your local `~/bin` and make 
 
 Some cool things you can do with it (a.k.a. _Do-s_ and _Don't-s_):
 
+- Use LISP style S-Expressions in operands like:
+```
+lda [+ color $27]
+ldy [- color 1],x
+```
 - Use include syntax anywhere in your file like:
 ```
 ./include screen.asm
@@ -32,6 +37,8 @@ Some cool things you can do with it (a.k.a. _Do-s_ and _Don't-s_):
 
 ./include ../misc.asm
 ```
+- Insert binary files with `./bin {filename}`
+
 - Inline or off-line labels, just take into account that labels not on the same line need to end with `:`. For labels on the same line that is optional.
 
 - It is allowed to enter label aliases (EQU in Merlin) between an off-line label and the next code line (see examples). This helps to put those below the subroutine name label but above the code and give it a more function-like look.
@@ -50,6 +57,8 @@ For keeping the directory structure of the project, if you're using the default 
 
     $ ln -s /home/you/path/to/xbbasm/src/ /home/you/go/src/xbbasm
 
+## To-Dos:
 
-
-
+- Document all the supported syntax so a user doesn't have to go through the sources to figure things not in the examples.
+- Add more unit tests since at the moment only the most basic ones exist (no tests for expected errors for example).
+- Would be nice to extend the `./bin` instruction to support offset and length params ACME style.

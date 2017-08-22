@@ -7,24 +7,18 @@ import (
 	"os"
 )
 
-//
-// globals
-
-// input and output filenames
-var input string
-var output *string
-
-// program starting address
-var startAddr int
-
 // symbols table
 var symbols map[string]int
 
+func init() {
+	resetSymbols()
+}
+
 func main() {
 
-	// init global state variables
-	startAddr = -1
-	symbols = map[string]int{}
+	// input and output filenames
+	var input string
+	var output *string
 
 	output = flag.String("out", "a.prg", "output filename")
 	flag.Parse()
@@ -45,8 +39,6 @@ func main() {
 			fmt.Fprintln(os.Stderr, e.Error())
 		}
 		os.Exit(1)
-	} else if startAddr == -1 {
-		fail("Missing start address. .ORG instruction not found")
 	}
 
 	// assemble program

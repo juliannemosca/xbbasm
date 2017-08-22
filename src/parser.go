@@ -9,16 +9,17 @@ import (
 )
 
 type parser struct {
-	input    []string
-	output   []tokenizedLine
-	errors   []error
-	fatal    error
-	rootPath string
+	input     []string
+	output    []tokenizedLine
+	errors    []error
+	fatal     error
+	currFPath string
+	tk        tokenizer
 }
 
 func beginParser(mainInput string) *parser {
 	p := parser{}
-	p.input = append(p.input, mainInput)
+	p.inputPush(mainInput)
 	p.parse()
 	return &p
 }
@@ -38,6 +39,12 @@ func (p *parser) parse() {
 			return
 		}
 
+		p.currFPath = filepath.Dir(*input)
+
+		// set the current filepath in the tokenizer
+		// for including bin files
+		p.tk.currFPath = p.currFPath
+
 		fsc := bufio.NewScanner(file)
 
 		var rawline string
@@ -56,9 +63,6 @@ func (p *parser) parse() {
 
 			// parse line
 			if strings.HasPrefix(strings.ToLower(cl), "./include ") {
-				if p.rootPath == "" {
-					p.rootPath = fmt.Sprintf("%s%c", filepath.Dir(*input), filepath.Separator)
-				}
 				p.parseIncludeLine(cl, *input, lnum)
 			} else {
 				cl = fmt.Sprintf("%s%s", partial, cl)
@@ -74,20 +78,21 @@ func (p *parser) parse() {
 }
 
 func (p *parser) parseIncludeLine(l, f string, lnum int) {
+	// Note: this function has not been tested very carefully, should
+	//       malfunction in file includes occur suspect this part of code 😬
 	filename := l[(len("./include ") - 1):]
 	if filename == "" || filename == "." || filename == ".." {
 		p.errors = append(p.errors, fmt.Errorf("Invalid include statement in file %s line %d", f, lnum))
 	} else {
 		filename = strings.TrimSpace(filename)
-		fp := filepath.Dir(f)
-		filename := fmt.Sprintf("%s%c%s%c%s", p.rootPath, filepath.Separator, fp, filepath.Separator, filename)
+		filename := fmt.Sprintf("%s%c%s", p.currFPath, filepath.Separator, filename)
 		p.inputPush(filepath.Clean(filename))
 	}
 	return
 }
 
 func (p *parser) parseCodeLine(l, f string, lnum int) string {
-	if tl, err := tokenize(l); err != nil {
+	if tl, err := p.tk.tokenize(l); err != nil {
 		p.errors = append(p.errors, fmt.Errorf("%s:%d:%s", f, lnum, err.Error()))
 	} else if tl != nil {
 		if tl.label != "" && tl.opc.mnemonic == "" {

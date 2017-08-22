@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -19,9 +20,13 @@ type tokenizedLine struct {
 	opr   operand
 }
 
-func tokenize(l string) (*tokenizedLine, error) {
+type tokenizer struct {
+	currFPath string
+}
+
+func (t tokenizer) tokenize(l string) (*tokenizedLine, error) {
 	tl := tokenizedLine{}
-	tokens := strings.FieldsFunc(l, isWhitespaceOrTab)
+	tokens := splitTokens(l)
 	tnum := len(tokens)
 
 	// handle case when an off line label
@@ -56,7 +61,7 @@ func tokenize(l string) (*tokenizedLine, error) {
 	} else if tnum == 2 {
 
 		// check if it's an instruction (pseudo opcode)
-		if inst, instOk, instErr := tryTokenizeInstruction(tokens, tnum); instErr != nil {
+		if inst, instOk, instErr := t.tryTokenizeInstruction(tokens, tnum); instErr != nil {
 			return nil, instErr
 		} else if instOk {
 			return inst, nil
@@ -68,7 +73,7 @@ func tokenize(l string) (*tokenizedLine, error) {
 
 		// first see if the last token is an operand
 		if isOpcode(tokens[0]) {
-			opr, oprErr := readOperand(tokens[1], tokens[0])
+			opr, oprErr := t.readOperand(tokens[1], tokens[0])
 			if oprErr != nil {
 				return nil, oprErr
 			}
@@ -92,13 +97,13 @@ func tokenize(l string) (*tokenizedLine, error) {
 	} else if tnum == 3 {
 
 		// check if it's an instruction (pseudo opcode)
-		if inst, instOk, instErr := tryTokenizeInstruction(tokens, tnum); instErr != nil {
+		if inst, instOk, instErr := t.tryTokenizeInstruction(tokens, tnum); instErr != nil {
 			return nil, instErr
 		} else if instOk {
 			return inst, nil
 		}
 
-		opr, oprErr := readOperand(tokens[2], tokens[1])
+		opr, oprErr := t.readOperand(tokens[2], tokens[1])
 		if oprErr != nil {
 			return nil, oprErr
 		}
@@ -126,7 +131,9 @@ func tokenize(l string) (*tokenizedLine, error) {
 	return &tl, nil
 }
 
-func tryTokenizeInstruction(tokens []string, tnum int) (*tokenizedLine, bool, error) {
+// To-Do: using `instruction` as a synonym for pseudoOpcode is innacurate, must rename.
+//
+func (t tokenizer) tryTokenizeInstruction(tokens []string, tnum int) (*tokenizedLine, bool, error) {
 
 	var tl tokenizedLine
 	var opc string
@@ -142,6 +149,10 @@ func tryTokenizeInstruction(tokens []string, tnum int) (*tokenizedLine, bool, er
 		// .ORG {addr}
 		// DFB {data...}
 		// so it's OPCODE-OPERAND
+		//
+		// also ./bin goes in here and passed
+		// like that all the way through
+		// for the assembler to resolve
 		opc = tokens[0]
 		opr = tokens[1]
 	case 3:
@@ -155,7 +166,7 @@ func tryTokenizeInstruction(tokens []string, tnum int) (*tokenizedLine, bool, er
 
 	if poc := readPseudoOpcode(opc); poc != nil {
 		tl.opc = *poc
-		opr, oprErr := readPseudoOperand(opr, opc)
+		opr, oprErr := t.readPseudoOperand(opr, opc)
 		if oprErr != nil {
 			return nil, true, oprErr
 		} else if opr == nil {
@@ -228,7 +239,7 @@ func readAddress(a string) (int, string, error) {
 				if isOpcode(a) {
 					return 0, "", fmt.Errorf("Cannot use opcode %s as a label", a)
 				}
-				// it's a label
+				// it's a label or a formula
 				return -1, a, nil
 			}
 		}
@@ -284,7 +295,7 @@ func readIndirect(ro string) (*operand, error) {
 	return &opr, nil
 }
 
-func readOperand(rawoper, opc string) (*operand, error) {
+func (t tokenizer) readOperand(rawoper, opc string) (*operand, error) {
 
 	// Syntax examples for the addressing modes:
 	//
@@ -412,17 +423,14 @@ func readOperand(rawoper, opc string) (*operand, error) {
 	return nil, fmt.Errorf("Syntax error in operand %s", rawoper)
 }
 
-func readPseudoOperand(rawoper, opc string) (*operand, error) {
+func (t tokenizer) readPseudoOperand(rawoper, opc string) (*operand, error) {
 	switch strings.ToUpper(opc) {
 	case ".ORG":
 		addrVal, addrLabel, addrErr := readAddress(rawoper)
 		if addrErr != nil {
 			return nil, fmt.Errorf("Could not read start address %s", rawoper)
-		} else if addrLabel != "" {
-			return nil, fmt.Errorf("Start address cannot be a label (%s) in %s", rawoper, opc)
 		} else {
-			startAddr = addrVal
-			return nil, nil
+			return &operand{addr: addrVal, label: addrLabel, mode: NOMODE}, nil
 		}
 	case ".TEXT":
 		if !isAsciiString(rawoper) {
@@ -453,6 +461,8 @@ func readPseudoOperand(rawoper, opc string) (*operand, error) {
 			return nil, fmt.Errorf("No valid data found for DFB instruction")
 		}
 		return &operand{defBytes: dfbValues, mode: NOMODE}, nil
+	case "./BIN":
+		return &operand{label: fmt.Sprintf("%s%c%s", t.currFPath, filepath.Separator, rawoper), mode: NOMODE}, nil
 	default:
 		// this should never be reached
 		panic(fmt.Sprintf("Unrecognized pseudo-opcode %s", opc))
@@ -463,8 +473,73 @@ func readPseudoOperand(rawoper, opc string) (*operand, error) {
 // Misc. helpers:
 // -----------------------------------------------------------------------------
 
-func isWhitespaceOrTab(r rune) bool {
-	return r == ' ' || r == '\t'
+func splitTokens(line string) []string {
+
+	// This takes the line with the spaces
+	// before and after already trimmed so we only
+	// have to worry about the spaces in between and the
+	// double quoted text for .TEXT instructions
+
+	var p byte
+	var i int
+	var readingFormula int
+
+	toks := []string{}
+	tok := ""
+
+	for i < len(line) {
+		p = line[i]
+		if readingFormula == 0 && isWhitespaceOrTab(p) && tok == "" {
+			i++
+			continue
+		} else if readingFormula == 0 && isWhitespaceOrTab(p) {
+			toks = append(toks, tok)
+			tok = ""
+			i++
+			continue
+		} else if p == '"' {
+			// if we find a double quote take all the rest
+			// as text and also remove any double quote
+			// at the end
+
+			if tok != "" {
+				toks = append(toks, tok)
+			}
+
+			tok = line[i+1:]
+			i += len(line) - i
+
+			// note: this hacky solution has the pretty funny
+			// effect that you could totally ommit the " at the end
+			//
+			// 	¯\_(ツ)_/¯
+			//
+			if tok[len(tok)-1] == '"' {
+				tok = tok[:len(tok)-1]
+			}
+
+			toks = append(toks, tok)
+			tok = ""
+			continue
+		} else if p == '[' {
+			readingFormula++
+		} else if p == ']' {
+			readingFormula--
+		}
+
+		tok += string(p)
+		i++
+	}
+
+	if tok != "" {
+		toks = append(toks, tok)
+	}
+
+	return toks
+}
+
+func isWhitespaceOrTab(b byte) bool {
+	return b == ' ' || b == '\t'
 }
 
 func isAsciiString(s string) bool {
